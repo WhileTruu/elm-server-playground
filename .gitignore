@@ -5,3 +5,5 @@ node_modules
 .envrc
 .direnv
 _site
+_temp
+codegen/Gen

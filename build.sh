@@ -50,11 +50,40 @@ function makePageHtml {
 
 <script type="text/javascript">
 $(cat $3)
-var app = Elm.Main.init({ flags: { width: window.innerWidth, height : window.innerHeight } });
+var app = Elm.Main.init({ flags: window.innerWidth });
 </script>
 
 </body>
 </html>
+EOF
+
+}
+
+
+
+## MAKE WORKER JS
+
+# ARGS:
+#   $1 = _site/pages/NAME.html
+#   $2 = compiled elm app js
+#
+function makeWorkerJs {
+  cat <<EOF > $1
+$(cat $2)
+
+var main = this.Elm.Worker.init();
+
+main.ports.put.subscribe(portCallback(main))
+
+function portCallback(elmApp) {
+  var f = function(portData) {
+    console.log(JSON.stringify(portData));
+    elmApp.ports.put.unsubscribe(f)
+  };
+  return f;
+}
+
+portCallback(main);
 EOF
 
 }
@@ -83,17 +112,35 @@ mkdir -p _temp
 
 
 
+## codegen
+
+echo "CODEGEN"
+
+pages="$(find src/Pages -type f -name "*.elm")"
+pages="$(echo $pages | sed 's/ /,/g' | sed 's/src\/Pages\///g')"
+npx elm-codegen run --output=_temp --flags="\"$pages\""
+
+workerJs="_temp/elm-worker.js"
+elm make "_temp/Worker.elm" --optimize --output=$workerJs > /dev/null
+makeWorkerJs "_temp/worker.js" $workerJs
+node "_temp/worker.js" > "_site/worker.json"
+
 ## pages
 
 
 echo "PAGES"
-for elm in $(find pages -type f -name "*.elm")
+for elm in $(find _temp/pages -type f -name "*.elm")
 do
-    subpath="${elm#pages/}"
+    sed -i '/^module /d' "$elm"
+    sed -i -e ':a' -e 'N' -e '$!ba' -e 's/{-| \n-}/ /g' "$elm"
+
+    subpath=$(echo "${elm#pages/}" | sed 's/_temp\/pages\///g')
     name="${subpath%.elm}"
     js="_temp/$name.js"
     html="_site/$name.html"
 
+    # this is currently not working, as we are compiling generated files which
+    # are always new
     if [ -f $html ] && [ $(date -r $elm +%s) -le $(date -r $html +%s) ]; then
         echo "Cached: $elm"
     else
