@@ -3,6 +3,7 @@ module MyApplication exposing (..)
 import Browser
 import Json.Decode as JD
 import Json.Encode as JE
+import Random
 
 
 type alias MyApplication flags model msg =
@@ -53,6 +54,14 @@ type Resolver a
         }
 
 
+resolverMap : (a -> b) -> Resolver a -> Resolver b
+resolverMap f (Resolver resolver) =
+    Resolver
+        { task = resolver.task
+        , decoder = resolver.decoder |> JD.map f
+        }
+
+
 resolverToDecoder : Resolver a -> JD.Decoder a
 resolverToDecoder (Resolver resolver) =
     resolver.decoder
@@ -71,8 +80,27 @@ resolverTimeNowMillis =
         }
 
 
+resolverRandomGenerate : Random.Generator value -> Resolver value
+resolverRandomGenerate generator =
+    resolverRandomInt32
+        |> resolverMap
+            (Random.initialSeed
+                >> Random.step generator
+                >> Tuple.first
+            )
+
+
+resolverRandomInt32 : Resolver Int
+resolverRandomInt32 =
+    Resolver
+        { task = ResolverTaskRandomSeed
+        , decoder = JD.int
+        }
+
+
 type ResolverTask
     = ResolverTaskTimeNowMillis
+    | ResolverTaskRandomSeed
 
 
 encodeTask : ResolverTask -> JE.Value
@@ -80,3 +108,6 @@ encodeTask task =
     case task of
         ResolverTaskTimeNowMillis ->
             JE.string "ResolverTaskTimeNowMillis"
+
+        ResolverTaskRandomSeed ->
+            JE.string "ResolverTaskRandomSeed"

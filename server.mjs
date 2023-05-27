@@ -13,6 +13,9 @@ const resolve = (key) => {
     case 'ResolverTaskTimeNowMillis':
       const timeNowMillis = Date.now();
       return JSON.stringify(timeNowMillis);
+    case 'ResolverTaskRandomSeed':
+      const randomInt32 = Math.floor(Math.random() * 2**32);
+      return JSON.stringify(randomInt32);
   }
 }
 
