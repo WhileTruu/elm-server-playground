@@ -50,7 +50,8 @@ function makePageHtml {
 
 <script type="text/javascript">
 $(cat $3)
-var app = Elm.Main.init({ flags: window.innerWidth });
+// REPLACE_ME_WITH_FLAGS
+var app = Elm.Main.init({ flags: flags });
 </script>
 
 </body>
@@ -139,6 +140,8 @@ do
     js="_temp/$name.js"
     html="_site/$name.html"
 
+
+    # FIXME replace generated file paths with the ones that are generated from (src/Pages/**/*.elm)
     # this is currently not working, as we are compiling generated files which
     # are always new
     if [ -f $html ] && [ $(date -r $elm +%s) -le $(date -r $html +%s) ]; then
