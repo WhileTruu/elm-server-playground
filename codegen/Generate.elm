@@ -37,17 +37,24 @@ main =
                                                         (\pageModuleName ->
                                                             Elm.apply
                                                                 (Elm.value
-                                                                    { importFrom = [ "MyApplication" ]
+                                                                    { importFrom = [ "Server" ]
                                                                     , name = "encodeResolver"
                                                                     , annotation = Nothing
                                                                     }
                                                                 )
-                                                                [ Elm.value
-                                                                    { importFrom = pageModuleName
-                                                                    , name = "application"
-                                                                    , annotation = Nothing
-                                                                    }
-                                                                    |> Elm.get "resolver"
+                                                                [ Elm.apply
+                                                                    (Elm.value
+                                                                        { importFrom = [ "Server" ]
+                                                                        , name = "generatedToResolver"
+                                                                        , annotation = Nothing
+                                                                        }
+                                                                    )
+                                                                    [ Elm.value
+                                                                        { importFrom = pageModuleName
+                                                                        , name = "program"
+                                                                        , annotation = Nothing
+                                                                        }
+                                                                    ]
                                                                 ]
                                                                 |> Elm.tuple (Elm.string (String.join "." pageModuleName))
                                                         )
@@ -89,14 +96,14 @@ file moduleName =
         [ Elm.declaration "main"
             (Elm.apply
                 (Elm.value
-                    { importFrom = [ "MyApplication" ]
-                    , name = "toBrowserDocument"
+                    { importFrom = [ "Server" ]
+                    , name = "generatedToBrowserDocument"
                     , annotation = Nothing
                     }
                 )
                 [ Elm.value
                     { importFrom = toPageModuleName moduleName
-                    , name = "application"
+                    , name = "program"
                     , annotation = Nothing
                     }
                 ]

@@ -1,9 +1,33 @@
-module Pages.Home exposing (application)
+module Pages.Home exposing (program)
 
 import Html exposing (Html, button, div, text)
 import Html.Events exposing (onClick)
-import MyApplication exposing (MyApplication)
 import Random
+import Server
+
+
+type alias Resolved =
+    { now : Int
+    , cardSuit : CardSuit
+    }
+
+
+resolver : Server.Resolver Resolved
+resolver =
+    Server.resolverSucceed
+        (\cardSuit timeNowMillis ->
+            { now = timeNowMillis
+            , cardSuit = cardSuit
+            }
+        )
+        |> Server.resolverAndMap (Server.resolverRandomGenerate cardSuitRandomGenerator)
+        |> Server.resolverAndMap Server.resolverTimeNowMillis
+
+
+type alias Model =
+    { count : Int
+    , cardSuit : CardSuit
+    }
 
 
 type CardSuit
@@ -11,6 +35,11 @@ type CardSuit
     | CardSuitClub
     | CardSuitHeart
     | CardSuitSpade
+
+
+cardSuitRandomGenerator : Random.Generator CardSuit
+cardSuitRandomGenerator =
+    Random.uniform CardSuitDiamond [ CardSuitClub, CardSuitHeart, CardSuitSpade ]
 
 
 cardSuitToString : CardSuit -> String
@@ -29,21 +58,9 @@ cardSuitToString cardSuit =
             "Spade"
 
 
-resolver : MyApplication.Resolver CardSuit
-resolver =
-    MyApplication.resolverRandomGenerate
-        (Random.uniform CardSuitDiamond [ CardSuitClub, CardSuitHeart, CardSuitSpade ])
-
-
-type alias Model =
-    { count : Int
-    , cardSuit : CardSuit
-    }
-
-
-init : CardSuit -> Model
-init cardSuit =
-    { count = 0
+init : { now : Int, cardSuit : CardSuit } -> Model
+init { now, cardSuit } =
+    { count = now
     , cardSuit = cardSuit
     }
 
@@ -74,15 +91,16 @@ view model =
     ]
 
 
-application : MyApplication CardSuit Model Msg
-application =
-    { init = \flags -> ( init flags, Cmd.none )
-    , view =
-        \model ->
-            { title = "Home"
-            , body = view model
-            }
-    , update = \msg model -> ( update msg model, Cmd.none )
-    , subscriptions = \_ -> Sub.none
-    , resolver = resolver
-    }
+program : Server.GeneratedProgram Resolved Model Msg
+program =
+    Server.generatedDocument
+        { init = \flags -> ( init flags, Cmd.none )
+        , view =
+            \model ->
+                { title = "Home"
+                , body = view model
+                }
+        , update = \msg model -> ( update msg model, Cmd.none )
+        , subscriptions = \_ -> Sub.none
+        , resolver = resolver
+        }

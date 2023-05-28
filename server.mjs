@@ -8,15 +8,27 @@ const __dirname = path.dirname(__filename);
 
 const resolveKeyTaskMap = JSON.parse(fs.readFileSync(path.join(__dirname, "/_site/worker.json")));
 
-const resolve = (key) => {
-  switch (resolveKeyTaskMap[key]) {
+const resolve = (task) => {
+  switch (task) {
     case 'ResolverTaskTimeNowMillis':
       const timeNowMillis = Date.now();
-      return JSON.stringify(timeNowMillis);
+      return timeNowMillis;
     case 'ResolverTaskRandomSeed':
       const randomInt32 = Math.floor(Math.random() * 2**32);
-      return JSON.stringify(randomInt32);
+      return randomInt32;
   }
+}
+
+const resolveAll = (key) => {
+  console.log(key)
+  const result = {};
+
+  for (const task of resolveKeyTaskMap[key]) {
+    result[task] = resolve(task);
+  }
+  console.log(result)
+
+  return result;
 }
 
 
@@ -37,7 +49,7 @@ server.get('/', (req, res, next) => {
         .toString()
         .replace(
             "// REPLACE_ME_WITH_FLAGS",
-            `var flags = ${resolve("Pages.Home")};`
+            `var flags = ${JSON.stringify(resolveAll("Pages.Home"))};`
         )
 
     res.send(fileContents);
