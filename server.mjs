@@ -2,35 +2,55 @@ import express from 'express'
 import path from 'path'
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { Elm } from './_site/worker.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const resolveKeyTaskMap = JSON.parse(fs.readFileSync(path.join(__dirname, "/_site/worker.json")));
-
-const resolve = (task) => {
+const resolveTask = (task) => {
   switch (task) {
-    case 'ResolverTaskTimeNowMillis':
+    case 'PosixTime':
       const timeNowMillis = Date.now();
       return timeNowMillis;
-    case 'ResolverTaskRandomSeed':
+    case 'RandomInt32':
       const randomInt32 = Math.floor(Math.random() * 2**32);
       return randomInt32;
   }
 }
 
-const resolveAll = (key) => {
-  console.log(key)
+const resolveAll = (tasks) => {
   const result = {};
 
-  for (const task of resolveKeyTaskMap[key]) {
-    result[task] = resolve(task);
+  for (const task of tasks) {
+    result[task] = resolveTask(task);
   }
-  console.log(result)
 
   return result;
 }
 
+const main = Elm.Worker.init();
+
+function getFlagsFor(resolve, key, data) {
+  main.ports.put.subscribe(portCallback(main))
+  main.ports.get.send([key, data])
+
+  function portCallback(elmApp) {
+    var f = function(effectResult) {
+      elmApp.ports.put.unsubscribe(f)
+
+      switch (effectResult.variant) {
+        case 'EffectResultLabels':
+          const obj = Object.assign(data, resolveAll(effectResult.payload))
+          getFlagsFor(resolve, key,  obj)
+          break;
+        case 'EffectResultSuccess':
+          resolve(data)
+          break;
+      }
+    };
+    return f;
+  }
+}
 
 const server = express()
 const port = process.env.PORT || 8080
@@ -45,14 +65,19 @@ server.get('/', (req, res, next) => {
       return;
     }
 
-    const fileContents = buff
-        .toString()
-        .replace(
-            "// REPLACE_ME_WITH_FLAGS",
-            `var flags = ${JSON.stringify(resolveAll("Pages.Home"))};`
-        )
 
-    res.send(fileContents);
+    const flags = new Promise(resolve => getFlagsFor(resolve, "Pages.Home", {}))
+    flags.then((resolvedFlags) => {
+        const fileContents = buff
+            .toString()
+            .replace(
+                "// REPLACE_ME_WITH_FLAGS",
+                `var flags = ${JSON.stringify(resolvedFlags)};`
+            )
+
+      res.send(fileContents);
+    })
+
   })
 })
 

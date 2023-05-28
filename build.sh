@@ -70,21 +70,13 @@ EOF
 #
 function makeWorkerJs {
   cat <<EOF > $1
-$(cat $2)
+const self = {};
 
-var main = this.Elm.Worker.init();
+$(cat $2 | sed 's/(this)/(self)/g')
 
-main.ports.put.subscribe(portCallback(main))
+const Elm = self.Elm;
 
-function portCallback(elmApp) {
-  var f = function(portData) {
-    console.log(JSON.stringify(portData));
-    elmApp.ports.put.unsubscribe(f)
-  };
-  return f;
-}
-
-portCallback(main);
+export { Elm };
 EOF
 
 }
@@ -122,9 +114,13 @@ pages="$(echo $pages | sed 's/ /,/g' | sed 's/src\/Pages\///g')"
 npx elm-codegen run --output=_temp --flags="\"$pages\""
 
 workerJs="_temp/elm-worker.js"
-elm make "_temp/Worker.elm" --optimize --output=$workerJs > /dev/null
-makeWorkerJs "_temp/worker.js" $workerJs
-node "_temp/worker.js" > "_site/worker.json"
+if is_prod
+then
+    elm make "_temp/Worker.elm" --optimize --output=$workerJs > /dev/null
+else
+   elm make "_temp/Worker.elm" --output=$workerJs > /dev/null
+fi
+makeWorkerJs "_site/worker.js" $workerJs
 
 ## pages
 

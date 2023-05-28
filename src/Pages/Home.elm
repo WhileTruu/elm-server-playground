@@ -4,6 +4,9 @@ import Html exposing (Html, button, div, text)
 import Html.Events exposing (onClick)
 import Random
 import Server
+import Server.Random
+import Server.Task as Task exposing (Task)
+import Server.Time
 
 
 type alias Resolved =
@@ -12,16 +15,16 @@ type alias Resolved =
     }
 
 
-resolver : Server.Resolver Resolved
+resolver : Task Never Resolved
 resolver =
-    Server.resolverSucceed
+    Task.succeed
         (\cardSuit timeNowMillis ->
             { now = timeNowMillis
             , cardSuit = cardSuit
             }
         )
-        |> Server.resolverAndMap (Server.resolverRandomGenerate cardSuitRandomGenerator)
-        |> Server.resolverAndMap Server.resolverTimeNowMillis
+        |> Task.andThen (\f -> Task.map f (Server.Random.generate cardSuitRandomGenerator))
+        |> Task.andThen (\f -> Task.map f Server.Time.now)
 
 
 type alias Model =
@@ -58,7 +61,7 @@ cardSuitToString cardSuit =
             "Spade"
 
 
-init : { now : Int, cardSuit : CardSuit } -> Model
+init : { a | now : Int, cardSuit : CardSuit } -> Model
 init { now, cardSuit } =
     { count = now
     , cardSuit = cardSuit
