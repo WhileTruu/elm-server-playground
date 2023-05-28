@@ -120,7 +120,7 @@ then
 else
    elm make "_temp/Worker.elm" --output=$workerJs > /dev/null
 fi
-makeWorkerJs "_site/worker.js" $workerJs
+makeWorkerJs "_site/worker.mjs" $workerJs
 
 ## pages
 

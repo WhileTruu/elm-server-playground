@@ -7,25 +7,36 @@ import { Elm } from './_site/worker.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const resolveTask = (task) => {
-  switch (task) {
-    case 'PosixTime':
-      const timeNowMillis = Date.now();
-      return timeNowMillis;
-    case 'RandomInt32':
-      const randomInt32 = Math.floor(Math.random() * 2**32);
-      return randomInt32;
-  }
-}
-
-const resolveAll = (tasks) => {
-  const result = {};
-
-  for (const task of tasks) {
-    result[task] = resolveTask(task);
-  }
-
-  return result;
+const resolveEffect = (effect) => {
+  return new Promise((resolve, reject) => {
+    switch (effect.effectKind) {
+      case 'PosixTime':
+        const timeNowMillis = Date.now();
+        resolve(timeNowMillis)
+        break
+      case 'RandomInt32':
+        const randomInt32 = Math.floor(Math.random() * 2**32)
+        resolve(randomInt32)
+        break
+      case 'Http':
+        fetch(effect.payload.url)
+          .then(res =>
+            res.text().then(text =>
+              resolve({
+                metadata: {
+                  url: res.url,
+                  statusCode: res.status,
+                  statusText: res.statusText,
+                  headers: Object.fromEntries(res.headers.entries()),
+                },
+                value: text,
+              })
+            ).catch(reject)
+            )
+          .catch(reject)
+        break
+    }
+  })
 }
 
 const main = Elm.Worker.init();
@@ -39,13 +50,17 @@ function getFlagsFor(resolve, key, data) {
       elmApp.ports.put.unsubscribe(f)
 
       switch (effectResult.variant) {
-        case 'EffectResultLabels':
-          const obj = Object.assign(data, resolveAll(effectResult.payload))
-          getFlagsFor(resolve, key,  obj)
+        case 'Loop':
+          Promise.all(effectResult.batch.map(resolveEffect)).then((resolved) => {
+            const obj = Object.fromEntries(effectResult.batch.map((val, i) => [val.hash, resolved[i]]))
+            getFlagsFor(resolve, key, Object.assign(data, obj))
+          })
           break;
-        case 'EffectResultSuccess':
+
+        case 'Done':
           resolve(data)
           break;
+
       }
     };
     return f;
@@ -64,7 +79,6 @@ server.get('/', (req, res, next) => {
       next(err)
       return;
     }
-
 
     const flags = new Promise(resolve => getFlagsFor(resolve, "Pages.Home", {}))
     flags.then((resolvedFlags) => {

@@ -7,13 +7,13 @@ import Server.InternalTask as InternalTask
 import Server.Task as Task exposing (Task)
 
 
-type GeneratedProgram resolved model msg
+type GeneratedProgram resolverError resolved model msg
     = GeneratedProgram
         { init : resolved -> ( model, Cmd msg )
         , view : model -> Browser.Document msg
         , update : msg -> model -> ( model, Cmd msg )
         , subscriptions : model -> Sub msg
-        , resolver : Task Never resolved
+        , resolver : Task resolverError resolved
         }
 
 
@@ -22,15 +22,15 @@ generatedDocument :
     , view : model -> Browser.Document msg
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
-    , resolver : Task Never resolved
+    , resolver : Task resolverError resolved
     }
-    -> GeneratedProgram resolved model msg
+    -> GeneratedProgram resolverError resolved model msg
 generatedDocument impl =
     GeneratedProgram impl
 
 
 generatedToBrowserDocument :
-    GeneratedProgram resolved model msg
+    GeneratedProgram resolverError resolved model msg
     -> Program JD.Value model msg
 generatedToBrowserDocument (GeneratedProgram impl) =
     Browser.document
@@ -61,7 +61,7 @@ generatedToBrowserDocument (GeneratedProgram impl) =
         }
 
 
-generatedToTask : GeneratedProgram flags model msg -> Task Never flags
+generatedToTask : GeneratedProgram resolverError flags model msg -> Task resolverError flags
 generatedToTask (GeneratedProgram impl) =
     impl.resolver
 

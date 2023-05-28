@@ -105,20 +105,20 @@ workerFile modules =
                                 |> Elm.Op.pipe
                                     (Elm.value
                                         { importFrom = [ "Server", "Effect" ]
-                                        , name = "effectResultFrom"
+                                        , name = "stepFromEffect"
                                         , annotation = Nothing
                                         }
                                     )
                                 |> Elm.Op.pipe
-                                    (Elm.fn ( "effectResultFromValue", Nothing )
-                                        (\effectResultFromValue ->
+                                    (Elm.fn ( "stepFromValue", Nothing )
+                                        (\stepFromValue ->
                                             Elm.fn ( "value", Just Gen.Json.Decode.annotation_.value )
                                                 (\value ->
-                                                    Elm.apply effectResultFromValue [ value ]
+                                                    Elm.apply stepFromValue [ value ]
                                                         |> Elm.Op.pipe
                                                             (Elm.value
                                                                 { importFrom = [ "Server", "Effect" ]
-                                                                , name = "encodeEffectResult"
+                                                                , name = "encodeStep"
                                                                 , annotation = Nothing
                                                                 }
                                                             )

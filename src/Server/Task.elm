@@ -5,6 +5,7 @@ module Server.Task exposing
     , fail
     , map
     , map2
+    , mapError
     , succeed
     )
 
@@ -39,6 +40,24 @@ map transform task =
 
                             Err err ->
                                 fail err |> InternalTask.toEffect
+                    )
+    in
+    InternalTask.fromEffect effect
+
+
+mapError : (a -> b) -> Task a ok -> Task b ok
+mapError transform task =
+    let
+        effect =
+            InternalTask.toEffect task
+                |> Effect.andThen
+                    (\result ->
+                        case result of
+                            Ok ok ->
+                                succeed ok |> InternalTask.toEffect
+
+                            Err err ->
+                                fail (transform err) |> InternalTask.toEffect
                     )
     in
     InternalTask.fromEffect effect

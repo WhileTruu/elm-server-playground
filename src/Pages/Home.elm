@@ -2,8 +2,10 @@ module Pages.Home exposing (program)
 
 import Html exposing (Html, button, div, text)
 import Html.Events exposing (onClick)
+import Json.Decode
 import Random
 import Server
+import Server.Http as Http
 import Server.Random
 import Server.Task as Task exposing (Task)
 import Server.Time
@@ -12,24 +14,37 @@ import Server.Time
 type alias Resolved =
     { now : Int
     , cardSuit : CardSuit
+    , publicOpinion : String
     }
 
 
-resolver : Task Never Resolved
+resolver : Task Http.Error Resolved
 resolver =
     Task.succeed
-        (\cardSuit timeNowMillis ->
+        (\cardSuit timeNowMillis publicOpinion ->
             { now = timeNowMillis
             , cardSuit = cardSuit
+            , publicOpinion = publicOpinion
             }
         )
         |> Task.andThen (\f -> Task.map f (Server.Random.generate cardSuitRandomGenerator))
         |> Task.andThen (\f -> Task.map f Server.Time.now)
+        |> Task.mapError never
+        |> Task.andThen
+            (\f ->
+                Task.map f
+                    (Http.get
+                        { url = "https://elm-lang.org/assets/public-opinion.txt"
+                        , decoder = Json.Decode.string
+                        }
+                    )
+            )
 
 
 type alias Model =
     { count : Int
     , cardSuit : CardSuit
+    , publicOpinion : String
     }
 
 
@@ -61,10 +76,11 @@ cardSuitToString cardSuit =
             "Spade"
 
 
-init : { a | now : Int, cardSuit : CardSuit } -> Model
-init { now, cardSuit } =
+init : Resolved -> Model
+init { now, cardSuit, publicOpinion } =
     { count = now
     , cardSuit = cardSuit
+    , publicOpinion = publicOpinion
     }
 
 
@@ -90,11 +106,14 @@ view model =
         , div [] [ text <| String.fromInt model.count ]
         , div [] [ text <| cardSuitToString model.cardSuit ]
         , button [ onClick Decrement ] [ text "-1" ]
+        , Html.p []
+            [ text model.publicOpinion
+            ]
         ]
     ]
 
 
-program : Server.GeneratedProgram Resolved Model Msg
+program : Server.GeneratedProgram Http.Error Resolved Model Msg
 program =
     Server.generatedDocument
         { init = \flags -> ( init flags, Cmd.none )
