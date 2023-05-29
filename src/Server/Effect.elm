@@ -42,8 +42,6 @@ map transform resolver =
             EffectPlatformFailure err
 
 
-{-| andThen needs super special handling server side
--}
 andThen : (a -> Effect b) -> Effect a -> Effect b
 andThen transform effect =
     case effect of
