@@ -18,11 +18,6 @@ import Json.Encode as JE
 import Server.InternalHttp as InternalHttp
 
 
-
--- if requests are needed, hashing needs to be introduced instead of labels,
--- since multiple requests can be made to the same endpoint with different payloads
-
-
 type Effect a
     = EffectInProgress (List EffectKind) (JD.Value -> Effect a)
     | EffectSuccess a
