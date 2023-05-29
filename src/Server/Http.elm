@@ -83,12 +83,6 @@ jsonBody value =
 handleJsonResponse : (Json.Decode.Value -> Result String a) -> Response -> Result Error a
 handleJsonResponse fromValue response =
     case response of
-        InternalHttp.BadRequest_ err ->
-            Err (InternalHttp.BadRequest err)
-
-        InternalHttp.Timeout_ ->
-            Err InternalHttp.Timeout
-
         InternalHttp.NetworkError_ ->
             Err InternalHttp.NetworkError
 

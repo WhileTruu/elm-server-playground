@@ -7,6 +7,25 @@ import { Elm } from './_site/worker.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const fetchResToMetadata = (res) => ({
+  url: res.url,
+  statusCode: res.status,
+  statusText: res.statusText,
+  headers: Object.fromEntries(res.headers.entries()),
+})
+
+const fetchResToResponse = (res, text) => ( {
+  variant: 200 <= res.status && res.status < 300 ? 'GoodStatus' : 'BadStatus',
+  metadata: fetchResToMetadata(res),
+  value: text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;"),
+})
+
+
 const resolveEffect = (effect) => {
   return new Promise((resolve, reject) => {
     switch (effect.effectKind) {
@@ -21,19 +40,13 @@ const resolveEffect = (effect) => {
       case 'Http':
         fetch(effect.payload.url)
           .then(res =>
-            res.text().then(text =>
-              resolve({
-                metadata: {
-                  url: res.url,
-                  statusCode: res.status,
-                  statusText: res.statusText,
-                  headers: Object.fromEntries(res.headers.entries()),
-                },
-                value: text,
-              })
-            ).catch(reject)
-            )
-          .catch(reject)
+            res.text()
+              .then(text => resolve(fetchResToResponse(res, text)))
+          )
+          .catch((err) => {
+            console.log(err)
+            resolve({variant: 'NetworkError'})
+          })
         break
     }
   })

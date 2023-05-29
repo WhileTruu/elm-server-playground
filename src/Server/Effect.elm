@@ -206,6 +206,7 @@ posixTime =
     EffectInProgress [ EffectKindPosixTime ]
         (\value ->
             let
+                result : Result JD.Error Int
                 result =
                     JD.decodeValue
                         (JD.field (effectKindHash EffectKindPosixTime) JD.int)
@@ -229,6 +230,7 @@ randomInt32 =
     EffectInProgress [ EffectKindRandomInt32 ]
         (\value ->
             let
+                result : Result JD.Error Int
                 result =
                     JD.decodeValue
                         (JD.field (effectKindHash EffectKindRandomInt32) JD.int)
@@ -251,22 +253,53 @@ sendRequest : InternalHttp.Request -> Effect InternalHttp.Response
 sendRequest req =
     EffectInProgress [ EffectKindHttp req ]
         (\value ->
-            JD.decodeValue
-                (JD.field (effectKindHash (EffectKindHttp req))
-                    (JD.map2 InternalHttp.GoodStatus_
-                        (JD.field "metadata" metadataDecoder)
-                        (JD.field "value" JD.value)
-                    )
-                )
-                value
-                |> Ok
-                |> Result.withDefault
-                    (JD.decodeValue (JD.field "metadata" metadataDecoder) value
-                        |> Result.map (\a -> InternalHttp.BadStatus_ a value)
-                    )
-                |> Result.withDefault InternalHttp.NetworkError_
-                |> EffectSuccess
+            let
+                result : Result JD.Error InternalHttp.Response
+                result =
+                    JD.decodeValue
+                        (JD.field (effectKindHash (EffectKindHttp req))
+                            responseDecoder
+                        )
+                        value
+            in
+            case result of
+                Ok a ->
+                    EffectSuccess a
+
+                Err err ->
+                    EffectPlatformFailure ("sendRequest: " ++ JD.errorToString err)
         )
+
+
+responseDecoder : JD.Decoder InternalHttp.Response
+responseDecoder =
+    let
+        decodeVariant : String -> JD.Decoder a -> JD.Decoder a
+        decodeVariant variantName decoder_ =
+            JD.field "variant" JD.string
+                |> JD.andThen
+                    (\str ->
+                        if str == variantName then
+                            decoder_
+
+                        else
+                            JD.fail ("Not " ++ variantName)
+                    )
+    in
+    JD.oneOf
+        [ decodeVariant "NetworkError"
+            (JD.succeed InternalHttp.NetworkError_)
+        , decodeVariant "BadStatus"
+            (JD.map2 InternalHttp.BadStatus_
+                (JD.field "metadata" metadataDecoder)
+                (JD.field "value" JD.value)
+            )
+        , decodeVariant "GoodStatus"
+            (JD.map2 InternalHttp.GoodStatus_
+                (JD.field "metadata" metadataDecoder)
+                (JD.field "value" JD.value)
+            )
+        ]
 
 
 metadataDecoder : JD.Decoder InternalHttp.Metadata

@@ -55,9 +55,7 @@ type MimeType a
 
 
 type Response
-    = BadRequest_ String
-    | Timeout_
-    | NetworkError_
+    = NetworkError_
     | BadStatus_ Metadata Json.Decode.Value
     | GoodStatus_ Metadata Json.Decode.Value
 
