@@ -21,87 +21,7 @@ import Server.InternalHttp as InternalHttp
 type Effect a
     = EffectInProgress (List EffectKind) (JD.Value -> Effect a)
     | EffectSuccess a
-
-
-type EffectKind
-    = EffectKindHttp InternalHttp.Request
-    | EffectKindRandomInt32
-    | EffectKindPosixTime
-
-
-hashEffectKind : EffectKind -> String
-hashEffectKind effectKind =
-    JE.object (effectKindEncode effectKind)
-        |> JE.encode 0
-        |> FNV1a.hash
-        |> String.fromInt
-
-
-effectKindEncode : EffectKind -> List ( String, JD.Value )
-effectKindEncode effectKind =
-    case effectKind of
-        EffectKindHttp request ->
-            [ ( "effectKind", JE.string "Http" )
-            , ( "payload"
-              , JE.object
-                    [ ( "method"
-                      , JE.string <|
-                            case request.method of
-                                InternalHttp.Options ->
-                                    "Options"
-
-                                InternalHttp.Get ->
-                                    "Get"
-
-                                InternalHttp.Post ->
-                                    "Post"
-
-                                InternalHttp.Put ->
-                                    "Put"
-
-                                InternalHttp.Delete ->
-                                    "Delete"
-
-                                InternalHttp.Head ->
-                                    "Head"
-
-                                InternalHttp.Trace ->
-                                    "Trace"
-
-                                InternalHttp.Connect ->
-                                    "Connect"
-
-                                InternalHttp.Patch ->
-                                    "Patch"
-                      )
-                    , ( "headers"
-                      , JE.list
-                            (\(InternalHttp.Header key value) ->
-                                JE.object
-                                    [ ( "key", JE.string key )
-                                    , ( "value", JE.string value )
-                                    ]
-                            )
-                            request.headers
-                      )
-                    , ( "url", JE.string request.url )
-                    , ( "body"
-                      , case request.body of
-                            InternalHttp.Body _ body ->
-                                body
-
-                            InternalHttp.EmptyBody ->
-                                JE.null
-                      )
-                    ]
-              )
-            ]
-
-        EffectKindRandomInt32 ->
-            [ ( "effectKind", JE.string "RandomInt32" ) ]
-
-        EffectKindPosixTime ->
-            [ ( "effectKind", JE.string "PosixTime" ) ]
+    | EffectPlatformFailure String
 
 
 always : a -> Effect a
@@ -118,6 +38,9 @@ map transform resolver =
         EffectSuccess a ->
             EffectSuccess (transform a)
 
+        EffectPlatformFailure err ->
+            EffectPlatformFailure err
+
 
 {-| andThen needs super special handling server side
 -}
@@ -129,6 +52,9 @@ andThen transform effect =
 
         EffectSuccess a ->
             transform a
+
+        EffectPlatformFailure err ->
+            EffectPlatformFailure err
 
 
 map2 : (a -> b -> c) -> Effect a -> Effect b -> Effect c
@@ -148,36 +74,19 @@ map2 transform effectA effectB =
         ( EffectSuccess a, EffectSuccess b ) ->
             EffectSuccess (transform a b)
 
+        ( EffectPlatformFailure errA, EffectPlatformFailure errB ) ->
+            EffectPlatformFailure (errA ++ " " ++ errB)
+
+        ( EffectPlatformFailure err, _ ) ->
+            EffectPlatformFailure err
+
+        ( _, EffectPlatformFailure err ) ->
+            EffectPlatformFailure err
+
 
 andMap : Effect a -> Effect (a -> b) -> Effect b
 andMap =
     map2 (|>)
-
-
-posixTime : Effect Int
-posixTime =
-    EffectInProgress [ EffectKindPosixTime ]
-        (\value ->
-            JD.decodeValue
-                (JD.field (hashEffectKind EffectKindPosixTime) JD.int)
-                value
-                -- FIXME handle error, or not somehow?
-                |> Result.withDefault -420
-                |> EffectSuccess
-        )
-
-
-randomInt32 : Effect Int
-randomInt32 =
-    EffectInProgress [ EffectKindRandomInt32 ]
-        (\value ->
-            JD.decodeValue
-                (JD.field (hashEffectKind EffectKindRandomInt32) JD.int)
-                value
-                -- FIXME handle error, or not somehow?
-                |> Result.withDefault -420
-                |> EffectSuccess
-        )
 
 
 toDecoder : Effect a -> JD.Decoder a
@@ -188,6 +97,46 @@ toDecoder effect =
 
         EffectSuccess a ->
             JD.succeed a
+
+        EffectPlatformFailure err ->
+            JD.fail err
+
+
+
+-- EFFECT KIND
+
+
+type EffectKind
+    = EffectKindHttp InternalHttp.Request
+    | EffectKindRandomInt32
+    | EffectKindPosixTime
+
+
+effectKindHash : EffectKind -> String
+effectKindHash effectKind =
+    JE.object (effectKindEncode effectKind)
+        |> JE.encode 0
+        |> FNV1a.hash
+        |> String.fromInt
+
+
+effectKindEncode : EffectKind -> List ( String, JD.Value )
+effectKindEncode effectKind =
+    case effectKind of
+        EffectKindHttp request ->
+            [ ( "effectKind", JE.string "Http" )
+            , ( "payload", encodeRequest request )
+            ]
+
+        EffectKindRandomInt32 ->
+            [ ( "effectKind", JE.string "RandomInt32" ) ]
+
+        EffectKindPosixTime ->
+            [ ( "effectKind", JE.string "PosixTime" ) ]
+
+
+
+-- EFFECT STEP
 
 
 type Step state a
@@ -206,7 +155,7 @@ stepFromEffect effect value =
                             areAllLabelsInResolvedPairs =
                                 List.all
                                     (\label ->
-                                        List.any (Tuple.first >> (==) (hashEffectKind label))
+                                        List.any (Tuple.first >> (==) (effectKindHash label))
                                             resolvedPairs
                                     )
                                     labels
@@ -222,6 +171,9 @@ stepFromEffect effect value =
         EffectSuccess _ ->
             Done ()
 
+        EffectPlatformFailure _ ->
+            Done ()
+
 
 encodeStep : Step (List EffectKind) () -> JD.Value
 encodeStep result =
@@ -234,7 +186,7 @@ encodeStep result =
                         |> JE.list
                             (\a ->
                                 JE.object
-                                    (( "hash", JE.string (hashEffectKind a) )
+                                    (( "hash", JE.string (effectKindHash a) )
                                         :: effectKindEncode a
                                     )
                             )
@@ -247,12 +199,62 @@ encodeStep result =
                 ]
 
 
+
+-- POSIX TIME EFFECT
+
+
+posixTime : Effect Int
+posixTime =
+    EffectInProgress [ EffectKindPosixTime ]
+        (\value ->
+            let
+                result =
+                    JD.decodeValue
+                        (JD.field (effectKindHash EffectKindPosixTime) JD.int)
+                        value
+            in
+            case result of
+                Ok a ->
+                    EffectSuccess a
+
+                Err err ->
+                    EffectPlatformFailure ("posixTime: " ++ JD.errorToString err)
+        )
+
+
+
+-- RANDOM INT 32 EFFECT
+
+
+randomInt32 : Effect Int
+randomInt32 =
+    EffectInProgress [ EffectKindRandomInt32 ]
+        (\value ->
+            let
+                result =
+                    JD.decodeValue
+                        (JD.field (effectKindHash EffectKindRandomInt32) JD.int)
+                        value
+            in
+            case result of
+                Ok a ->
+                    EffectSuccess a
+
+                Err err ->
+                    EffectPlatformFailure ("randomInt32: " ++ JD.errorToString err)
+        )
+
+
+
+-- REQUEST EFFECT
+
+
 sendRequest : InternalHttp.Request -> Effect InternalHttp.Response
 sendRequest req =
     EffectInProgress [ EffectKindHttp req ]
         (\value ->
             JD.decodeValue
-                (JD.field (hashEffectKind (EffectKindHttp req))
+                (JD.field (effectKindHash (EffectKindHttp req))
                     (JD.map2 InternalHttp.GoodStatus_
                         (JD.field "metadata" metadataDecoder)
                         (JD.field "value" JD.value)
@@ -280,3 +282,60 @@ metadataDecoder =
                 |> JD.map (List.map (\( k, v ) -> InternalHttp.Header k v))
             )
         )
+
+
+encodeRequest : InternalHttp.Request -> JD.Value
+encodeRequest request =
+    JE.object
+        [ ( "method", JE.string (requestMethodToString request.method) )
+        , ( "headers"
+          , JE.list
+                (\(InternalHttp.Header key value) ->
+                    JE.object
+                        [ ( "key", JE.string key )
+                        , ( "value", JE.string value )
+                        ]
+                )
+                request.headers
+          )
+        , ( "url", JE.string request.url )
+        , ( "body"
+          , case request.body of
+                InternalHttp.Body _ body ->
+                    body
+
+                InternalHttp.EmptyBody ->
+                    JE.null
+          )
+        ]
+
+
+requestMethodToString : InternalHttp.Method -> String
+requestMethodToString method =
+    case method of
+        InternalHttp.Options ->
+            "Options"
+
+        InternalHttp.Get ->
+            "Get"
+
+        InternalHttp.Post ->
+            "Post"
+
+        InternalHttp.Put ->
+            "Put"
+
+        InternalHttp.Delete ->
+            "Delete"
+
+        InternalHttp.Head ->
+            "Head"
+
+        InternalHttp.Trace ->
+            "Trace"
+
+        InternalHttp.Connect ->
+            "Connect"
+
+        InternalHttp.Patch ->
+            "Patch"
