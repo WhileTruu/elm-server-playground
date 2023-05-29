@@ -29,7 +29,6 @@ resolver =
         )
         |> Task.andThen (\f -> Task.map f (Server.Random.generate cardSuitRandomGenerator))
         |> Task.andThen (\f -> Task.map f Server.Time.now)
-        |> Task.mapError never
         |> Task.andThen
             (\f ->
                 Task.map f

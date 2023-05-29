@@ -5,7 +5,7 @@ import Server.InternalTask as InternalTask
 import Server.Task exposing (Task)
 
 
-now : Task Never Int
+now : Task err Int
 now =
     Effect.posixTime
         |> Effect.map Ok

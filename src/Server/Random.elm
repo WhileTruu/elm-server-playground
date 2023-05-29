@@ -6,7 +6,7 @@ import Server.InternalTask as InternalTask
 import Server.Task as Task exposing (Task)
 
 
-generate : Random.Generator a -> Task Never a
+generate : Random.Generator a -> Task err a
 generate generator =
     int32
         |> Task.map
@@ -16,7 +16,7 @@ generate generator =
             )
 
 
-int32 : Task Never Int
+int32 : Task err Int
 int32 =
     Effect.randomInt32
         |> Effect.map Ok
