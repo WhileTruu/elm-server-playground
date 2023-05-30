@@ -2,6 +2,7 @@ module Server.Task exposing
     ( Task
     , andMap
     , andThen
+    , await
     , fail
     , map
     , map2
@@ -79,6 +80,11 @@ andThen transform task =
                     )
     in
     InternalTask.fromEffect effect
+
+
+await : Task err a -> (a -> Task err b) -> Task err b
+await task transform =
+    andThen transform task
 
 
 map2 : (a -> b -> c) -> Task err a -> Task err b -> Task err c

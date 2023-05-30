@@ -20,6 +20,21 @@ type alias Resolved =
 
 resolver : Task Http.Error Resolved
 resolver =
+    Task.await (Server.Random.generate cardSuitRandomGenerator) <|
+        \cardSuit ->
+            Task.await Server.Time.now <|
+                \timeNowMillis ->
+                    Task.await fetchPublicOpinion <|
+                        \publicOpinion ->
+                            { now = timeNowMillis
+                            , cardSuit = cardSuit
+                            , publicOpinion = publicOpinion
+                            }
+                                |> Task.succeed
+
+
+resolverParallel : Task Http.Error Resolved
+resolverParallel =
     Task.succeed
         (\cardSuit timeNowMillis publicOpinion ->
             { now = timeNowMillis
@@ -27,17 +42,17 @@ resolver =
             , publicOpinion = publicOpinion
             }
         )
-        |> Task.andThen (\f -> Task.map f (Server.Random.generate cardSuitRandomGenerator))
-        |> Task.andThen (\f -> Task.map f Server.Time.now)
-        |> Task.andThen
-            (\f ->
-                Task.map f
-                    (Http.get
-                        { url = "https://elm-lang.org/assets/public-opinion.txt"
-                        , decoder = Json.Decode.string
-                        }
-                    )
-            )
+        |> Task.andMap (Server.Random.generate cardSuitRandomGenerator)
+        |> Task.andMap Server.Time.now
+        |> Task.andMap fetchPublicOpinion
+
+
+fetchPublicOpinion : Task Http.Error String
+fetchPublicOpinion =
+    Http.get
+        { url = "https://elm-lang.org/assets/public-opinion.txt"
+        , decoder = Json.Decode.string
+        }
 
 
 type alias Model =
@@ -115,13 +130,23 @@ view model =
 program : Server.GeneratedProgram Http.Error Resolved Model Msg
 program =
     Server.generatedDocument
-        { init = \flags -> ( init flags, Cmd.none )
+        { init =
+            \flags ->
+                ( init flags
+                , Cmd.none
+                )
         , view =
             \model ->
                 { title = "Home"
                 , body = view model
                 }
-        , update = \msg model -> ( update msg model, Cmd.none )
-        , subscriptions = \_ -> Sub.none
+        , update =
+            \msg model ->
+                ( update msg model
+                , Cmd.none
+                )
+        , subscriptions =
+            \_ ->
+                Sub.none
         , resolver = resolver
         }

@@ -5,7 +5,6 @@ module Generate exposing (main)
 import Elm
 import Elm.Annotation as Annotation
 import Elm.Op
-import Gen.Basics
 import Gen.CodeGen.Generate as Generate
 import Gen.Dict
 import Gen.Json.Decode
@@ -13,7 +12,6 @@ import Gen.Json.Encode
 import Gen.Maybe
 import Gen.Platform
 import Gen.Platform.Cmd
-import Gen.Platform.Sub
 import Gen.Tuple
 import Json.Decode
 import String.Extra as String
